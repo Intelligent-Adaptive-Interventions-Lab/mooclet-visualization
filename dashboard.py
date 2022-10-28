@@ -1,6 +1,7 @@
 import dash
 from dash import html
 from dash import dcc
+from dash import dash_table
 import plotly.graph_objects as go
 import plotly.express as px
 from dash.dependencies import Input, Output
@@ -37,31 +38,47 @@ app.layout = html.Div(
                 ],
             value = '__all__'
         ),
-        dcc.Graph(id = 'summary_table')
+        html.Div(id='summary_table')
     ]
 )
 
 
-@app.callback(Output(component_id='bar_plot', component_property= 'figure'),
-              [Input(component_id='dropdown', component_property= 'value')])
-def graph_update(dropdown_value):
+@app.callback(
+    Output(component_id='summary_table', component_property= 'children'),
+    [
+        Input(component_id='tab_policy_dropdown', component_property= 'value')
+    ]
+)
+def update_summary_table(dropdown_value):
     print(dropdown_value)
-    # GROUP BY (Given policy, contextual)
-    fig = go.Figure([
-        go.Scatter(
-            x = df['date'],
-            y = df['{}'.format(dropdown_value)],
-            line = dict(color = 'firebrick', width = 4)
+    if dropdown_value == "uniform_random":
+        df_query = ur_df.copy()
+    elif dropdown_value == "thompson_sampling_contextual":
+        df_query = tsc_df.copy()
+    else:
+        df_query = df.copy()
+
+    if dropdown_value == "__all__":
+        df_query = df_query.groupby(["arm"]).agg({
+            "modular_link_mha_prototype_linkrating": ["mean", "std", "sem", "count"],
+            "arm": ["count"]
+        })
+    else:
+        df_query = df_query.groupby(["policy", "arm"]).agg({
+            "modular_link_mha_prototype_linkrating": ["mean", "std", "sem", "count"],
+            "arm": ["count"]
+        })
+
+    return [dash_table.DataTable(
+            columns=[{"name": i, "id": '_'.join(i)} for i in df_query.columns],
+            data=[ {"_".join(col): val for col, val in row.items() } for row in df_query.to_dict('records') ], 
+            style_as_list_view=True,
+            fill_width=True,
+            style_cell={'font-size': '12px'},
+            style_header={'display': 'none'},
+            style_table={'height': '395px', 'overflowY': 'auto'}
         )
-    ])
-
-    fig.update_layout(
-        title = 'Stock prices over time',
-        xaxis_title = 'Dates',
-        yaxis_title = 'Prices'
-    )
-    return fig  
-
+    ]
 
 
 if __name__ == '__main__': 
