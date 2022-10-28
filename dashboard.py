@@ -70,13 +70,10 @@ def update_summary_table(dropdown_value):
         })
 
     return [dash_table.DataTable(
-            columns=[{"name": i, "id": '_'.join(i)} for i in df_query.columns],
+            columns=[{"name": list(i), "id": '_'.join(i)} for i in df_query.columns],
             data=[ {"_".join(col): val for col, val in row.items() } for row in df_query.to_dict('records') ], 
             style_as_list_view=True,
-            fill_width=True,
-            style_cell={'font-size': '12px'},
-            style_header={'display': 'none'},
-            style_table={'height': '395px', 'overflowY': 'auto'}
+            fill_width=True
         )
     ]
 
