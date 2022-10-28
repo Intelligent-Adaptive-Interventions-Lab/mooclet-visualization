@@ -60,20 +60,20 @@ def update_summary_table(dropdown_value):
 
     if dropdown_value == "__all__":
         df_query = df_query.groupby(["arm"]).agg({
-            "modular_link_mha_prototype_linkrating": ["mean", "std", "sem", "count"],
-            "arm": ["count"]
+            "arm": ["first", "count"],
+            "modular_link_mha_prototype_linkrating": ["mean", "std", "sem", "count"]
         })
     else:
         df_query = df_query.groupby(["policy", "arm"]).agg({
-            "modular_link_mha_prototype_linkrating": ["mean", "std", "sem", "count"],
-            "arm": ["count"]
+            "policy": ["first"],
+            "arm": ["first", "count"],
+            "modular_link_mha_prototype_linkrating": ["mean", "std", "sem", "count"]
         })
 
     return [dash_table.DataTable(
-            columns=[{"name": list(i), "id": '_'.join(i)} for i in df_query.columns],
-            data=[ {"_".join(col): val for col, val in row.items() } for row in df_query.to_dict('records') ], 
-            style_as_list_view=True,
-            fill_width=True
+            columns=[{"name": [item if item != "first" else "" for item in list(i)], "id": '_'.join(i)} for i in df_query.columns],
+            data=[ {"_".join(col): round(val, 3) if isinstance(val, float) else val for col, val in row.items() } for row in df_query.to_dict('records') ],
+            merge_duplicate_headers=True,
         )
     ]
 
