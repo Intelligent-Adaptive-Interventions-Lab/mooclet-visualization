@@ -14,8 +14,24 @@ app = dash.Dash()
 
 xls = pd.ExcelFile('datasets/Modular_Link_MHA_Prototype.xlsx')
 ur_df = pd.read_excel(xls, 'UR_0')
+ur_df["modular_link_mha_prototype_linkrating"] = ur_df["modular_link_mha_prototype_linkrating"] * 4 + 1
+
 tsc_df = pd.read_excel(xls, 'TSC_4')
+tsc_df["modular_link_mha_prototype_linkrating"] = tsc_df["modular_link_mha_prototype_linkrating"] * 4 + 1
+
 df = pd.concat([ur_df, tsc_df])
+
+contextual_variables = [
+    "modular_link_mha_prototype_hadrecentactivitylast48hours",
+    "modular_link_mha_prototype_isweekend", 
+    "modular_link_mha_prototype_timeofday", 
+    "modular_link_mha_prototype_highmood", 
+    "modular_link_mha_prototype_highenergy", 
+    "modular_link_mha_prototype_studyday", 
+    "modular_link_mha_prototype_k10", 
+    "modular_link_mha_prototype_averageresponsiveness", 
+    "modular_link_mha_prototype_averagecontentratingsoverall"
+]
 
 app.layout = html.Div(
     id = 'parent', children = [
@@ -67,7 +83,14 @@ app.layout = html.Div(
                 [ {'label': 'All Arms', 'value': '__all__'} ],
             value = '__all__'
         ),
-        dcc.Graph(id = 'summary_reward_bar_plot')
+        dcc.Graph(id = 'summary_reward_bar_plot'),
+        dcc.Dropdown(
+            id = 'tab_context_dropdown',
+            options =  [ {"label": context, "value": context} for context in contextual_variables ],
+            value = contextual_variables[0]
+        ),
+        dcc.Graph(id = 'summary_context_bar_plot'),
+        
     ]
 )
 
@@ -152,6 +175,80 @@ def update_summary_reward_bar_plot(policy_dropdown_value, arm_dropdown_value):
         yaxis_title = 'Reward Count'
     )
     
+    return fig
+
+
+@app.callback(
+    Output(component_id='summary_context_bar_plot', component_property= 'figure'),
+    [
+        Input(component_id='tab_policy_dropdown', component_property= 'value'),
+        Input(component_id='tab_arm_dropdown', component_property= 'value'),
+        Input(component_id='tab_context_dropdown', component_property= 'value'),
+    ]
+)
+def update_summary_context_bar_plot(policy_dropdown_value, arm_dropdown_value, context_dropdown_value):
+    print(policy_dropdown_value, arm_dropdown_value, context_dropdown_value)
+    if policy_dropdown_value == "uniform_random":
+        df_query = ur_df.copy()
+    elif policy_dropdown_value == "thompson_sampling_contextual":
+        df_query = tsc_df.copy()
+    else:
+        df_query = df.copy()
+    
+    context_query = df_query.groupby([context_dropdown_value, "arm"]).agg({
+    context_dropdown_value: ["first"],
+        "arm": ["first"],
+        "modular_link_mha_prototype_linkrating": ["first", "mean", "std", "sem", "count"]
+    })
+    
+    all_query = df_query.groupby(["arm"]).agg({
+        "arm": ["first"],
+        "modular_link_mha_prototype_linkrating": ["first", "mean", "std", "sem", "count"]
+    })
+    all_query[(context_dropdown_value, "first")] = "Overall Average"
+
+    df_query = pd.concat([context_query, all_query])
+    
+    df_query[(context_dropdown_value, "first")] = df_query[(context_dropdown_value, "first")].astype(str)
+
+    if arm_dropdown_value != "__all__":
+        df_query = df_query[df_query[("arm", "first")] == arm_dropdown_value]
+
+    data = []
+    for arm in df_query[("arm", "first")].unique().tolist():
+        arm_df = df_query[df_query[("arm", "first")] == arm]
+        counts = arm_df[("modular_link_mha_prototype_linkrating", "count")].values.tolist()
+        means = [ round(item, 3) for item in arm_df[("modular_link_mha_prototype_linkrating", "mean")].values.tolist() ] 
+        stds = [ round(item, 3) for item in arm_df[("modular_link_mha_prototype_linkrating", "std")].values.tolist() ] 
+        sems = [ round(item, 3) for item in arm_df[("modular_link_mha_prototype_linkrating", "sem")].values.tolist() ]
+
+        texts = []
+        for count, mean, std, sem in zip(counts, means, stds, sems):
+            text = f"count = {count} mean = {mean} std = {std} sem= {sem}"
+            texts.append(text)
+
+        arm_data = go.Bar(
+            name = arm,
+            x = df_query[(context_dropdown_value, "first")].unique().tolist(), 
+            y = means,
+            # marker = dict(color = 'rgba(255, 255, 128, 0.5)', line=dict(color='rgb(0,0,0)',width=1.5)),
+            hovertext = texts
+        )
+
+        data.append(arm_data)
+
+    fig = go.Figure(
+        data = data,
+        layout = go.Layout(barmode = "group"), 
+        layout_yaxis_range=[0, 5]
+    )
+
+    fig.update_layout(
+        title = 'Mean Reward in Different Context Group',
+        xaxis_title = 'Context Group',
+        yaxis_title = 'Mean Reward'
+    )
+
     return fig
 
 
