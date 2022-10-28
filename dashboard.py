@@ -146,6 +146,35 @@ app.layout = html.Div(
             options =  [ {"label": context, "value": context} for context in contextual_variables ],
             value = contextual_variables[0]
         ),
+        html.Div(
+            id = 'summary_context_time_change',
+            children = [
+                dcc.RadioItems(
+                    ['US/Central', 'US/Eastern'],
+                    'US/Central',
+                    id='summary_context_timezone_change_type',
+                    inline=True
+                ),
+                dcc.RadioItems(
+                    ['week', 'day'],
+                    'week',
+                    id='summary_context_timerange_change_type',
+                    inline=True
+                )
+            ], 
+            style={
+                'display': 'inline-block',
+                'marginTop':20,
+                'marginBottom':20
+            }
+        ),
+        html.Div(
+            id = 'summary_context_time_slider_div', 
+            style={
+                'textAlign':'center',
+                'marginBottom':5
+            }
+        ),
         dcc.Graph(id = 'summary_context_bar_plot'),
         
     ]
@@ -307,9 +336,12 @@ def update_summary_reward_bar_plot(policy_dropdown_value, arm_dropdown_value, su
         Input(component_id='tab_policy_dropdown', component_property= 'value'),
         Input(component_id='tab_arm_dropdown', component_property= 'value'),
         Input(component_id='tab_context_dropdown', component_property= 'value'),
+        Input(component_id='summary_context_timezone_change_type', component_property= 'value'),
+        Input(component_id='summary_context_timerange_change_type', component_property= 'value'),
+        Input(component_id='summary_context_time_slider', component_property= 'value')
     ]
 )
-def update_summary_context_bar_plot(policy_dropdown_value, arm_dropdown_value, context_dropdown_value):
+def update_summary_context_bar_plot(policy_dropdown_value, arm_dropdown_value, context_dropdown_value, summary_context_timezone_change_type, summary_context_timerange_change_type, summary_context_time_slider):
     print(policy_dropdown_value, arm_dropdown_value, context_dropdown_value)
     if policy_dropdown_value == "uniform_random":
         df_query = ur_df.copy()
@@ -317,6 +349,36 @@ def update_summary_context_bar_plot(policy_dropdown_value, arm_dropdown_value, c
         df_query = tsc_df.copy()
     else:
         df_query = df.copy()
+    
+    df_query['reward_create_time'] = pd.to_datetime(df_query['reward_create_time']).dt.tz_convert(summary_context_timezone_change_type)
+    df_query['arm_assign_time'] = pd.to_datetime(df_query['arm_assign_time']).dt.tz_convert(summary_context_timezone_change_type)
+
+    day_offset = 7 if summary_context_timerange_change_type == "week" else 1
+
+    last_reward_idx = df_query['reward_create_time'].last_valid_index()
+    last_arm_idx = -1
+    
+    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
+        time_range = pd.date_range(
+            start=df_query['arm_assign_time'].iloc[0] - pd.offsets.Day(day_offset), 
+            end=df_query['reward_create_time'].iloc[last_reward_idx] + pd.offsets.Day(day_offset), 
+            tz=summary_context_timezone_change_type, 
+            freq=f"{day_offset}D", 
+            inclusive="right"
+        )
+    else:
+        time_range = pd.date_range(
+            start=df_query['arm_assign_time'].iloc[0] - pd.offsets.Day(day_offset), 
+            end=df_query['arm_assign_time'].iloc[last_arm_idx] + pd.offsets.Day(day_offset), 
+            tz=summary_context_timezone_change_type, 
+            freq=f"{day_offset}D", 
+            inclusive="right"
+        )
+    
+    df_query = df_query.loc[
+        (df_query['arm_assign_time'] >= str(time_range[summary_context_time_slider[0]])) & \
+        (df_query['arm_assign_time'] < str(time_range[summary_context_time_slider[1]]))
+    ]
     
     context_query = df_query.groupby([context_dropdown_value, "arm"]).agg({
     context_dropdown_value: ["first"],
@@ -483,6 +545,59 @@ def update_summary_reward_time_slider(tab_policy_dropdown, summary_reward_timezo
         )
     ]
 
+@app.callback(
+    Output(component_id='summary_context_time_slider_div', component_property= 'children'),
+    [
+        Input(component_id='tab_policy_dropdown', component_property= 'value'),
+        Input(component_id='summary_context_timezone_change_type', component_property= 'value'),
+        Input(component_id='summary_context_timerange_change_type', component_property= 'value')
+    ]
+)
+def update_summary_context_time_slider(tab_policy_dropdown, summary_context_timezone_change_type, summary_context_timerange_change_type):
+    print(tab_policy_dropdown, summary_context_timezone_change_type, summary_context_timerange_change_type)
+    if tab_policy_dropdown == "uniform_random":
+        df_query = ur_df.copy()
+    elif tab_policy_dropdown == "thompson_sampling_contextual":
+        df_query = tsc_df.copy()
+    else:
+        df_query = df.copy()
+
+    df_query['reward_create_time'] = pd.to_datetime(df_query['reward_create_time']).dt.tz_convert(summary_context_timezone_change_type)
+    df_query['arm_assign_time'] = pd.to_datetime(df_query['arm_assign_time']).dt.tz_convert(summary_context_timezone_change_type)
+
+    day_offset = 7 if summary_context_timerange_change_type == "week" else 1
+
+    last_reward_idx = df_query['reward_create_time'].last_valid_index()
+    last_arm_idx = -1
+    
+    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
+        time_range = pd.date_range(
+            start=df_query['arm_assign_time'].iloc[0] - pd.offsets.Day(day_offset), 
+            end=df_query['reward_create_time'].iloc[last_reward_idx] + pd.offsets.Day(day_offset), 
+            tz=summary_context_timezone_change_type, 
+            freq=f"{day_offset}D", 
+            inclusive="right"
+        )
+    else:
+        time_range = pd.date_range(
+            start=df_query['arm_assign_time'].iloc[0] - pd.offsets.Day(day_offset), 
+            end=df_query['arm_assign_time'].iloc[last_arm_idx] + pd.offsets.Day(day_offset), 
+            tz=summary_context_timezone_change_type, 
+            freq=f"{day_offset}D", 
+            inclusive="right"
+        )
+
+    return [
+        dcc.RangeSlider(
+            id="summary_context_time_slider",
+            min=0, 
+            max=len(time_range) - 1, 
+            step=len(time_range),
+            value=[0, len(time_range) - 1],
+            marks={str(idx): time_range[idx].strftime('%m-%d') for idx in range(len(time_range))},
+            updatemode='drag'
+        )
+    ]
 
 if __name__ == '__main__': 
     app.run_server()
