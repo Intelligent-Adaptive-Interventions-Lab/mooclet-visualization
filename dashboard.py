@@ -285,8 +285,7 @@ app.layout = dbc.Container(
                     width=12,
                     xl=8
                 ),
-            ],
-            align="center",
+            ]
         ),
     ],
     fluid=True
@@ -336,8 +335,8 @@ def update_summary_table(dropdown_value, tab_timezone_change_type, tab_timerange
         )
     
     df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[tab_time_slider[0]])) & \
-        (df_query['arm_assign_time'] < str(time_range[tab_time_slider[1]]))
+        (df_query['arm_assign_time'] >= str(time_range[max(0, tab_time_slider[0])])) & \
+        (df_query['arm_assign_time'] < str(time_range[min(tab_time_slider[1], len(time_range) - 1)]))
     ]
 
     if dropdown_value == "__all__":
@@ -406,8 +405,8 @@ def update_summary_reward_bar_plot(policy_dropdown_value, arm_dropdown_value, su
         )
     
     df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[summary_reward_time_slider[0]])) & \
-        (df_query['arm_assign_time'] < str(time_range[summary_reward_time_slider[1]]))
+        (df_query['arm_assign_time'] >= str(time_range[max(0, summary_reward_time_slider[0])])) & \
+        (df_query['arm_assign_time'] < str(time_range[min(summary_reward_time_slider[1], len(time_range) - 1)]))
     ]
     
     if arm_dropdown_value == "__all__":
@@ -488,8 +487,8 @@ def update_summary_context_bar_plot(policy_dropdown_value, arm_dropdown_value, c
         )
     
     df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[summary_context_time_slider[0]])) & \
-        (df_query['arm_assign_time'] < str(time_range[summary_context_time_slider[1]]))
+        (df_query['arm_assign_time'] >= str(time_range[max(0, summary_context_time_slider[0])])) & \
+        (df_query['arm_assign_time'] < str(time_range[min(summary_context_time_slider[1], len(time_range) - 1)]))
     ]
     
     context_query = df_query.groupby([context_dropdown_value, "arm"]).agg({
@@ -594,8 +593,8 @@ def update_summary_missing_pie_chart(policy_dropdown_value, arm_dropdown_value, 
         )
     
     df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[summary_missing_time_slider[0]])) & \
-        (df_query['arm_assign_time'] < str(time_range[summary_missing_time_slider[1]]))
+        (df_query['arm_assign_time'] >= str(time_range[max(0, summary_missing_time_slider[0])])) & \
+        (df_query['arm_assign_time'] < str(time_range[min(summary_missing_time_slider[1], len(time_range) - 1)]))
     ]
 
     df_query = df_query.groupby(["arm"]).agg({
