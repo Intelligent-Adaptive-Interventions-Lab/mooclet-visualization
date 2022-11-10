@@ -82,12 +82,24 @@ def upload_mooclets(file, num):
 def prepare():
     for i in range(len(XLS)):
         ur_df = pd.read_excel(XLS[i], 'UR_0')
-        ur_df[REWARD[i]] = ur_df[REWARD[i]] * 4 + 1
-        UR_DFS.append(ur_df)
+        ur_scaled_up = False
+        for j in ur_df[REWARD[i]]:
+            if j > 1:
+                ur_scaled_up = True
+                break
+        if not ur_scaled_up:
+            ur_df[REWARD[i]] = ur_df[REWARD[i]] * 4 + 1
+            UR_DFS.append(ur_df)
 
         tsc_df = pd.read_excel(XLS[i], 'TSC_4')
-        tsc_df[REWARD[i]] = ur_df[REWARD[i]] * 4 + 1
-        TSC_DFS.append(tsc_df)
+        tsc_scaled_up = False
+        for j in tsc_df[REWARD[i]]:
+            if j > 1:
+                tsc_scaled_up = True
+                break
+        if not tsc_scaled_up:
+            tsc_df[REWARD[i]] = tsc_df[REWARD[i]] * 4 + 1
+            TSC_DFS.append(tsc_df)
 
         df = pd.concat([ur_df, tsc_df])
         DFS.append(df)
