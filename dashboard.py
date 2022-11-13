@@ -1,17 +1,22 @@
-import dash
-from dash import html
-from dash import dcc
-from dash import dash_table
+from pandas_datareader import wb
+from dash import html, dcc, dash_table
+from dash.dependencies import Input, Output
+
+
 import plotly.graph_objects as go
 import plotly.express as px
-from dash.dependencies import Input, Output
 import pandas as pd
+import dash_bootstrap_components as dbc
 import requests
-from config import TOKEN
 import json
+import dash
 
 
-app = dash.Dash()
+from config import TOKEN
+from utils import get_dataset, filter_by_time
+
+
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # df = px.data.stocks()
 
@@ -65,49 +70,91 @@ mhadf = pd.concat([mhaur_df, mhatsc_df])
 # mimtsc_df = pd.read_excel(mimxls, 'TSC_4')
 # mimdf = pd.concat([mimur_df, mimtsc_df])
 
-app.layout = html.Div(
-    id='parent', children=[
-        html.H1(
-            id='H1',
-            children='Testing Modular Link Table',
-            style={
-                'textAlign': 'center',
-                'marginTop': 40,
-                'marginBottom': 40
-            }
-        ),
-        html.H2(
-            id='change_mooclet',
-            children='Change Mooclet',
-            style={
-                'textAlign': 'left',
-                'marginBottom': 20
-            }
-        ),
-        dcc.Dropdown(
-            id='tab_mooclet_dropdown',
-            options=[{"label": mooclet[moocletid], "value": moocletid}
-                     for moocletid in mooclet],
-            value=315
-        ),
-        html.H2(
-            id='change_policy',
-            children='Change Policy',
-            style={
-                'textAlign': 'left',
-                'marginBottom': 20
-            }
-        ),
-        dcc.Dropdown(
-            id='tab_policy_dropdown',
-            options=[
-                {'label': 'Uniform Random', 'value': 'uniform_random'},
-                {'label': 'TS Contextual', 'value': 'thompson_sampling_contextual'},
-                {'label': 'All Policies', 'value': '__any__'},
-                {'label': 'All Data', 'value': '__all__'},
-            ],
-            value='__all__'
-        ),
+controls = dbc.Card(
+    [
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        html.H2(
+                            id='change_mooclet',
+                            children='Change Mooclet',
+                            style={
+                                'textAlign': 'left',
+                                'marginBottom': 20
+                            }
+                        ),
+                        dcc.Dropdown(
+                            id='tab_mooclet_dropdown',
+                            options=[{"label": mooclet[moocletid], "value": moocletid} for moocletid in mooclet],
+                            value=315
+                        )
+                    ], 
+                    width=12
+                ),
+                dbc.Col(
+                    [
+                        html.H2(
+                            id = 'change_policy',
+                            children = 'Change Policy',
+                            style = {
+                                'textAlign':'left',
+                                'marginBottom':20
+                            }
+                        ),
+                        dcc.Dropdown(
+                            id = 'tab_policy_dropdown',
+                            options = [
+                                {'label': 'Uniform Random', 'value': 'uniform_random' },
+                                {'label': 'TS Contextual', 'value': 'thompson_sampling_contextual'},
+                                {'label': 'All Policies', 'value': '__any__'},
+                                {'label': 'All Data', 'value': '__all__'},
+                                ],
+                            value = '__all__'
+                        )
+                    ], 
+                    width=12
+                ),
+                dbc.Col(
+                    [
+                        html.H2(
+                            id = 'change_arm',
+                            children = 'Change Arm',
+                            style = {
+                                'textAlign':'left',
+                                'marginBottom':20
+                            }
+                        ),
+                        html.Div(
+                            id='tab_arm_dropdown_div'
+                        )
+                    ], 
+                    width=12
+                ),
+                dbc.Col(
+                    [
+                        html.H2(
+                            id = 'change_context',
+                            children = 'Change Context',
+                            style = {
+                                'textAlign':'left',
+                                'marginBottom':20
+                            }
+                        ),
+                        html.Div(
+                            id='tab_context_dropdown_div'
+                        ),
+                    ], 
+                    width=12
+                ),
+            ]
+        )
+    ],
+    className="p-3"
+)
+
+summary_table = dbc.Card(
+    [
         html.Div(
             id='tab_time_change',
             children=[
@@ -143,17 +190,12 @@ app.layout = html.Div(
                 'marginBottom': 20
             }
         ),
-        html.H2(
-            id='change_arm',
-            children='Change Arm',
-            style={
-                'textAlign': 'left',
-                'marginBottom': 20
-            }
-        ),
-        html.Div(
-            id='tab_arm_dropdown_div'
-        ),
+    ],
+    className="m-2"
+)
+
+reward_num_bar_plot = dbc.Card(
+    [
         html.Div(
             id='summary_reward_time_change',
             children=[
@@ -183,10 +225,49 @@ app.layout = html.Div(
                 'marginBottom': 5
             }
         ),
-        dcc.Graph(id='summary_reward_bar_plot'),
+        dcc.Graph(id = 'summary_reward_bar_plot')
+    ],
+    className="m-2"
+)
+
+missing_data_pie_chart = dbc.Card(
+    [
         html.Div(
-            id='tab_context_dropdown_div'
+            id = 'summary_missing_time_change',
+            children = [
+                dcc.RadioItems(
+                    ['US/Central', 'US/Eastern'],
+                    'US/Central',
+                    id='summary_missing_timezone_change_type',
+                    inline=True
+                ),
+                dcc.RadioItems(
+                    ['week', 'day'],
+                    'week',
+                    id='summary_missing_timerange_change_type',
+                    inline=True
+                )
+            ], 
+            style={
+                'display': 'inline-block',
+                'marginTop':20,
+                'marginBottom':20
+            }
         ),
+        html.Div(
+            id = 'summary_missing_time_slider_div', 
+            style={
+                'textAlign':'center',
+                'marginBottom':5
+            }
+        ),
+        dcc.Graph(id = 'summary_missing_pie_chart')
+    ],
+    className="m-2"
+)
+
+context_group_bar_plot = dbc.Card(
+    [
         html.Div(
             id='summary_context_time_change',
             children=[
@@ -216,10 +297,44 @@ app.layout = html.Div(
                 'marginBottom': 5
             }
         ),
-        dcc.Graph(id='summary_context_bar_plot'),
+        dcc.Graph(id = 'summary_context_bar_plot')
+    ],
+    className="m-2"
+)
 
+app.layout = dbc.Container(
+    [
+        html.H1(
+            id = 'H1',
+            children = 'MOOClet Visualization',
+            style = {
+                'textAlign':'center',
+                'marginTop':20,
+                'marginBottom':20
+            }
+        ),
+        dbc.Row(
+            [
+                dbc.Col(controls, width=12, xl=4,  className="h-100"),
+                dbc.Col(
+                    [
+                        summary_table,
+                        dbc.Row(
+                            [
+                                dbc.Col([reward_num_bar_plot], width=6, lg=7, md=12),
+                                dbc.Col([missing_data_pie_chart], width=6, lg=5, md=12)
+                            ]
+                        ),
+                        context_group_bar_plot
+                    ], 
+                    width=12,
+                    xl=8
+                ),
+            ]
+        ),
         dcc.Store(id='selected_mooclet_data')
-    ]
+    ],
+    fluid=True
 )
 
 
@@ -256,65 +371,15 @@ def update_selected_mooclet(mooclet_dropdown_value):
     [
         Input(component_id='selected_mooclet_data', component_property='data'),
         Input(component_id='tab_policy_dropdown', component_property='value'),
-        Input(component_id='tab_timezone_change_type',
-              component_property='value'),
-        Input(component_id='tab_timerange_change_type',
-              component_property='value'),
+        Input(component_id='tab_timezone_change_type', component_property='value'),
+        Input(component_id='tab_timerange_change_type', component_property='value'),
         Input(component_id='tab_time_slider', component_property='value')
     ]
 )
 def update_summary_table(df, dropdown_value, tab_timezone_change_type, tab_timerange_change_type, tab_time_slider):
-    print(dropdown_value, tab_timezone_change_type,
-          tab_timerange_change_type, tab_time_slider)
-    ds = json.loads(df)
-
-    if dropdown_value == "uniform_random":
-        df_query = pd.read_json(ds['ur_df'], orient='split')
-    elif dropdown_value == "thompson_sampling_contextual":
-        df_query = pd.read_json(ds['tsc_df'], orient='split')
-    else:
-        df_query = pd.read_json(ds['df'], orient='split')
-
-    reward_var = ds['rv']
-    print('rv')
-    print(reward_var)
-
-    # df_query = df_query.dropna(subset=['reward_create_time'])
-    df_query['reward_create_time'] = pd.to_datetime(
-        df_query['reward_create_time']).dt.tz_convert(tab_timezone_change_type)
-    df_query['arm_assign_time'] = pd.to_datetime(
-        df_query['arm_assign_time']).dt.tz_convert(tab_timezone_change_type)
-
-    day_offset = 7 if tab_timerange_change_type == "week" else 1
-
-    last_reward_idx = df_query['reward_create_time'].last_valid_index()
-    last_arm_idx = -1
-
-    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['reward_create_time'].iloc[last_reward_idx] +
-            pd.offsets.Day(day_offset),
-            tz=tab_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-    else:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['arm_assign_time'].iloc[last_arm_idx] +
-            pd.offsets.Day(day_offset),
-            tz=tab_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-
-    df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[tab_time_slider[0]])) &
-        (df_query['arm_assign_time'] < str(time_range[tab_time_slider[1]]))
-    ]
+    print(dropdown_value, tab_timezone_change_type, tab_timerange_change_type, tab_time_slider)
+    df_query, reward_var = get_dataset(df, dropdown_value)
+    df_query, _ = filter_by_time(df_query, tab_timezone_change_type, tab_timerange_change_type, tab_time_slider)
 
     if dropdown_value == "__all__":
         df_query = df_query.groupby(["arm"]).agg({
@@ -347,63 +412,15 @@ def update_summary_table(df, dropdown_value, tab_timezone_change_type, tab_timer
         Input(component_id='selected_mooclet_data', component_property='data'),
         Input(component_id='tab_policy_dropdown', component_property='value'),
         Input(component_id='tab_arm_dropdown', component_property='value'),
-        Input(component_id='summary_reward_timezone_change_type',
-              component_property='value'),
-        Input(component_id='summary_reward_timerange_change_type',
-              component_property='value'),
-        Input(component_id='summary_reward_time_slider',
-              component_property='value')
+        Input(component_id='summary_reward_timezone_change_type', component_property='value'),
+        Input(component_id='summary_reward_timerange_change_type', component_property='value'),
+        Input(component_id='summary_reward_time_slider', component_property='value')
     ]
 )
 def update_summary_reward_bar_plot(df, policy_dropdown_value, arm_dropdown_value, summary_reward_timezone_change_type, summary_reward_timerange_change_type, summary_reward_time_slider):
-    print(policy_dropdown_value, arm_dropdown_value)
-    ds = json.loads(df)
-    if policy_dropdown_value == "uniform_random":
-        df_query = pd.read_json(ds['ur_df'], orient='split')
-    elif policy_dropdown_value == "thompson_sampling_contextual":
-        df_query = pd.read_json(ds['tsc_df'], orient='split')
-    else:
-        df_query = pd.read_json(ds['df'], orient='split')
-
-    reward_var = ds['rv']
-
-    # df_query = df_query.dropna(subset=['reward_create_time'])
-    df_query['reward_create_time'] = pd.to_datetime(
-        df_query['reward_create_time']).dt.tz_convert(summary_reward_timezone_change_type)
-    df_query['arm_assign_time'] = pd.to_datetime(
-        df_query['arm_assign_time']).dt.tz_convert(summary_reward_timezone_change_type)
-
-    day_offset = 7 if summary_reward_timerange_change_type == "week" else 1
-
-    last_reward_idx = df_query['reward_create_time'].last_valid_index()
-    last_arm_idx = -1
-
-    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['reward_create_time'].iloc[last_reward_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_reward_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-    else:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['arm_assign_time'].iloc[last_arm_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_reward_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-
-    df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[summary_reward_time_slider[0]])) &
-        (df_query['arm_assign_time'] < str(
-            time_range[summary_reward_time_slider[1]]))
-    ]
+    print(policy_dropdown_value, arm_dropdown_value, summary_reward_timezone_change_type, summary_reward_timerange_change_type, summary_reward_time_slider)
+    df_query, reward_var = get_dataset(df, policy_dropdown_value)
+    df_query, _ = filter_by_time(df_query, summary_reward_timezone_change_type, summary_reward_timerange_change_type, summary_reward_time_slider)
 
     if arm_dropdown_value == "__all__":
         df_query = df_query.groupby([reward_var]).agg({
@@ -447,64 +464,15 @@ def update_summary_reward_bar_plot(df, policy_dropdown_value, arm_dropdown_value
         Input(component_id='tab_policy_dropdown', component_property='value'),
         Input(component_id='tab_arm_dropdown', component_property='value'),
         Input(component_id='tab_context_dropdown', component_property='value'),
-        Input(component_id='summary_context_timezone_change_type',
-              component_property='value'),
-        Input(component_id='summary_context_timerange_change_type',
-              component_property='value'),
-        Input(component_id='summary_context_time_slider',
-              component_property='value')
+        Input(component_id='summary_context_timezone_change_type', component_property='value'),
+        Input(component_id='summary_context_timerange_change_type', component_property='value'),
+        Input(component_id='summary_context_time_slider', component_property='value')
     ]
 )
 def update_summary_context_bar_plot(df, policy_dropdown_value, arm_dropdown_value, context_dropdown_value, summary_context_timezone_change_type, summary_context_timerange_change_type, summary_context_time_slider):
-    print(policy_dropdown_value, arm_dropdown_value, context_dropdown_value)
-    ds = json.loads(df)
-    if policy_dropdown_value == "uniform_random":
-        df_query = pd.read_json(ds['ur_df'], orient='split')
-    elif policy_dropdown_value == "thompson_sampling_contextual":
-        df_query = pd.read_json(ds['tsc_df'], orient='split')
-    else:
-        df_query = pd.read_json(ds['df'], orient='split')
-
-    reward_var = ds['rv']
-
-    # df_query = df_query.dropna(subset=['reward_create_time'])
-
-    df_query['reward_create_time'] = pd.to_datetime(
-        df_query['reward_create_time']).dt.tz_convert(summary_context_timezone_change_type)
-    df_query['arm_assign_time'] = pd.to_datetime(
-        df_query['arm_assign_time']).dt.tz_convert(summary_context_timezone_change_type)
-
-    day_offset = 7 if summary_context_timerange_change_type == "week" else 1
-
-    last_reward_idx = df_query['reward_create_time'].last_valid_index()
-    last_arm_idx = -1
-
-    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['reward_create_time'].iloc[last_reward_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_context_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-    else:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['arm_assign_time'].iloc[last_arm_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_context_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-
-    df_query = df_query.loc[
-        (df_query['arm_assign_time'] >= str(time_range[summary_context_time_slider[0]])) &
-        (df_query['arm_assign_time'] < str(
-            time_range[summary_context_time_slider[1]]))
-    ]
+    print(policy_dropdown_value, arm_dropdown_value, context_dropdown_value, summary_context_timezone_change_type, summary_context_timerange_change_type, summary_context_time_slider)
+    df_query, reward_var = get_dataset(df, policy_dropdown_value)
+    df_query, _ = filter_by_time(df_query, summary_context_timezone_change_type, summary_context_timerange_change_type, summary_context_time_slider)
 
     context_query = df_query.groupby([context_dropdown_value, "arm"]).agg({
         context_dropdown_value: ["first"],
@@ -529,14 +497,10 @@ def update_summary_context_bar_plot(df, policy_dropdown_value, arm_dropdown_valu
     data = []
     for arm in df_query[("arm", "first")].unique().tolist():
         arm_df = df_query[df_query[("arm", "first")] == arm]
-        counts = arm_df[(reward_var,
-                         "count")].values.tolist()
-        means = [round(item, 3) for item in arm_df[(
-            reward_var, "mean")].values.tolist()]
-        stds = [round(item, 3) for item in arm_df[(
-            reward_var, "std")].values.tolist()]
-        sems = [round(item, 3) for item in arm_df[(
-            reward_var, "sem")].values.tolist()]
+        counts = arm_df[(reward_var, "count")].values.tolist()
+        means = [round(item, 3) for item in arm_df[(reward_var, "mean")].values.tolist()]
+        stds = [round(item, 3) for item in arm_df[(reward_var, "std")].values.tolist()]
+        sems = [round(item, 3) for item in arm_df[(reward_var, "sem")].values.tolist()]
 
         texts = []
         for count, mean, std, sem in zip(counts, means, stds, sems):
@@ -569,58 +533,57 @@ def update_summary_context_bar_plot(df, policy_dropdown_value, arm_dropdown_valu
 
 
 @app.callback(
-    Output(component_id='tab_time_slider_div', component_property='children'),
+    Output(component_id='summary_missing_pie_chart', component_property= 'figure'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property= 'value'),
+        Input(component_id='tab_arm_dropdown', component_property= 'value'),
+        Input(component_id='summary_missing_timezone_change_type', component_property= 'value'),
+        Input(component_id='summary_missing_timerange_change_type', component_property= 'value'),
+        Input(component_id='summary_missing_time_slider', component_property= 'value')
+    ]
+)
+def update_summary_missing_pie_chart(df, policy_dropdown_value, arm_dropdown_value, summary_missing_timezone_change_type, summary_missing_timerange_change_type, summary_missing_time_slider):
+    print(policy_dropdown_value, arm_dropdown_value, summary_missing_timezone_change_type, summary_missing_timerange_change_type, summary_missing_time_slider)
+    df_query, _ = get_dataset(df, policy_dropdown_value)
+    df_query, _ = filter_by_time(df_query, summary_missing_timezone_change_type, summary_missing_timerange_change_type, summary_missing_time_slider)
+
+    df_query = df_query.groupby(["arm"]).agg({
+        "arm": ["first", "count"],
+        "reward_name": ["count"]
+    })
+    
+    if arm_dropdown_value != "__all__":
+        df_query = df_query[df_query[("arm", "first")] == arm_dropdown_value]
+
+    labels = ["Give Responses", "No Responses"]
+    values = [df_query[("arm", "count")].sum(), df_query[("reward_name", "count")].sum()]
+    
+    fig = go.Figure(
+        [
+            go.Pie(labels=labels, values=values)
+        ]
+    )
+    fig.update_layout(
+        title = 'Miss Data Distribution'
+    )
+    
+    return fig
+
+
+@app.callback(
+    Output(component_id='tab_time_slider_div', component_property= 'children'),
     [
         Input(component_id='selected_mooclet_data', component_property='data'),
         Input(component_id='tab_policy_dropdown', component_property='value'),
-        Input(component_id='tab_timezone_change_type',
-              component_property='value'),
-        Input(component_id='tab_timerange_change_type',
-              component_property='value')
+        Input(component_id='tab_timezone_change_type', component_property='value'),
+        Input(component_id='tab_timerange_change_type', component_property='value')
     ]
 )
 def update_tab_time_slider(df, tab_policy_dropdown, tab_timezone_change_type, tab_timerange_change_type):
     print(tab_policy_dropdown, tab_timezone_change_type, tab_timerange_change_type)
-    ds = json.loads(df)
-
-    if tab_policy_dropdown == "uniform_random":
-        df_query = pd.read_json(ds['ur_df'], orient='split')
-    elif tab_policy_dropdown == "thompson_sampling_contextual":
-        df_query = pd.read_json(ds['tsc_df'], orient='split')
-    else:
-        df_query = pd.read_json(ds['df'], orient='split')
-
-    # df_query = df_query.dropna(subset=['reward_create_time'])
-    df_query['reward_create_time'] = pd.to_datetime(
-        df_query['reward_create_time']).dt.tz_convert(tab_timezone_change_type)
-    df_query['arm_assign_time'] = pd.to_datetime(
-        df_query['arm_assign_time']).dt.tz_convert(tab_timezone_change_type)
-
-    day_offset = 7 if tab_timerange_change_type == "week" else 1
-
-    last_reward_idx = df_query['reward_create_time'].last_valid_index()
-    last_arm_idx = -1
-
-    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['reward_create_time'].iloc[last_reward_idx] +
-            pd.offsets.Day(day_offset),
-            tz=tab_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-    else:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['arm_assign_time'].iloc[last_arm_idx] +
-            pd.offsets.Day(day_offset),
-            tz=tab_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
+    df_query, _ = get_dataset(df, tab_policy_dropdown)
+    _, time_range = filter_by_time(df_query, tab_timezone_change_type, tab_timerange_change_type)
 
     return [
         dcc.RangeSlider(
@@ -642,55 +605,14 @@ def update_tab_time_slider(df, tab_policy_dropdown, tab_timezone_change_type, ta
     [
         Input(component_id='selected_mooclet_data', component_property='data'),
         Input(component_id='tab_policy_dropdown', component_property='value'),
-        Input(component_id='summary_reward_timezone_change_type',
-              component_property='value'),
-        Input(component_id='summary_reward_timerange_change_type',
-              component_property='value')
+        Input(component_id='summary_reward_timezone_change_type', component_property='value'),
+        Input(component_id='summary_reward_timerange_change_type', component_property='value')
     ]
 )
 def update_summary_reward_time_slider(df, tab_policy_dropdown, summary_reward_timezone_change_type, summary_reward_timerange_change_type):
-    print(tab_policy_dropdown, summary_reward_timezone_change_type,
-          summary_reward_timerange_change_type)
-    ds = json.loads(df)
-
-    if tab_policy_dropdown == "uniform_random":
-        df_query = pd.read_json(ds['ur_df'], orient='split')
-    elif tab_policy_dropdown == "thompson_sampling_contextual":
-        df_query = pd.read_json(ds['tsc_df'], orient='split')
-    else:
-        df_query = pd.read_json(ds['df'], orient='split')
-
-    # df_query = df_query.dropna(subset=['reward_create_time'])
-    df_query['reward_create_time'] = pd.to_datetime(
-        df_query['reward_create_time']).dt.tz_convert(summary_reward_timezone_change_type)
-    df_query['arm_assign_time'] = pd.to_datetime(
-        df_query['arm_assign_time']).dt.tz_convert(summary_reward_timezone_change_type)
-
-    day_offset = 7 if summary_reward_timerange_change_type == "week" else 1
-
-    last_reward_idx = df_query['reward_create_time'].last_valid_index()
-    last_arm_idx = -1
-
-    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['reward_create_time'].iloc[last_reward_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_reward_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-    else:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['arm_assign_time'].iloc[last_arm_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_reward_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
+    print(tab_policy_dropdown, summary_reward_timezone_change_type, summary_reward_timerange_change_type)
+    df_query, _ = get_dataset(df, tab_policy_dropdown)
+    _, time_range = filter_by_time(df_query, summary_reward_timezone_change_type, summary_reward_timerange_change_type)
 
     return [
         dcc.RangeSlider(
@@ -712,55 +634,14 @@ def update_summary_reward_time_slider(df, tab_policy_dropdown, summary_reward_ti
     [
         Input(component_id='selected_mooclet_data', component_property='data'),
         Input(component_id='tab_policy_dropdown', component_property='value'),
-        Input(component_id='summary_context_timezone_change_type',
-              component_property='value'),
-        Input(component_id='summary_context_timerange_change_type',
-              component_property='value')
+        Input(component_id='summary_context_timezone_change_type', component_property='value'),
+        Input(component_id='summary_context_timerange_change_type', component_property='value')
     ]
 )
 def update_summary_context_time_slider(df, tab_policy_dropdown, summary_context_timezone_change_type, summary_context_timerange_change_type):
-    print(tab_policy_dropdown, summary_context_timezone_change_type,
-          summary_context_timerange_change_type)
-    ds = json.loads(df)
-
-    if tab_policy_dropdown == "uniform_random":
-        df_query = pd.read_json(ds['ur_df'], orient='split')
-    elif tab_policy_dropdown == "thompson_sampling_contextual":
-        df_query = pd.read_json(ds['tsc_df'], orient='split')
-    else:
-        df_query = pd.read_json(ds['df'], orient='split')
-
-    # df_query = df_query.dropna(subset=['reward_create_time'])
-    df_query['reward_create_time'] = pd.to_datetime(
-        df_query['reward_create_time']).dt.tz_convert(summary_context_timezone_change_type)
-    df_query['arm_assign_time'] = pd.to_datetime(
-        df_query['arm_assign_time']).dt.tz_convert(summary_context_timezone_change_type)
-
-    day_offset = 7 if summary_context_timerange_change_type == "week" else 1
-
-    last_reward_idx = df_query['reward_create_time'].last_valid_index()
-    last_arm_idx = -1
-
-    if last_reward_idx is not None and df_query['reward_create_time'].iloc[last_reward_idx] > df_query['arm_assign_time'].iloc[last_arm_idx]:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['reward_create_time'].iloc[last_reward_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_context_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
-    else:
-        time_range = pd.date_range(
-            start=df_query['arm_assign_time'].iloc[0] -
-            pd.offsets.Day(day_offset),
-            end=df_query['arm_assign_time'].iloc[last_arm_idx] +
-            pd.offsets.Day(day_offset),
-            tz=summary_context_timezone_change_type,
-            freq=f"{day_offset}D",
-            inclusive="right"
-        )
+    print(tab_policy_dropdown, summary_context_timezone_change_type, summary_context_timerange_change_type)
+    df_query, _ = get_dataset(df, tab_policy_dropdown)
+    _, time_range = filter_by_time(df_query, summary_context_timezone_change_type, summary_context_timerange_change_type)
 
     return [
         dcc.RangeSlider(
@@ -771,6 +652,33 @@ def update_summary_context_time_slider(df, tab_policy_dropdown, summary_context_
             value=[0, len(time_range) - 1],
             marks={str(idx): time_range[idx].strftime('%m-%d')
                    for idx in range(len(time_range))},
+            updatemode='drag'
+        )
+    ]
+
+
+@app.callback(
+    Output(component_id='summary_missing_time_slider_div', component_property= 'children'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property= 'value'),
+        Input(component_id='summary_missing_timezone_change_type', component_property= 'value'),
+        Input(component_id='summary_missing_timerange_change_type', component_property= 'value')
+    ]
+)
+def update_summary_missing_time_slider(df, tab_policy_dropdown, summary_missing_timezone_change_type, summary_missing_timerange_change_type):
+    print(tab_policy_dropdown, summary_missing_timezone_change_type, summary_missing_timerange_change_type)
+    df_query, _ = get_dataset(df, tab_policy_dropdown)
+    _, time_range = filter_by_time(df_query, summary_missing_timezone_change_type, summary_missing_timerange_change_type)
+
+    return [
+        dcc.RangeSlider(
+            id="summary_missing_time_slider",
+            min=0, 
+            max=len(time_range) - 1, 
+            step=len(time_range),
+            value=[0, len(time_range) - 1],
+            marks={str(idx): time_range[idx].strftime('%m-%d') for idx in range(len(time_range))},
             updatemode='drag'
         )
     ]
@@ -791,7 +699,7 @@ def update_tab_arm_dropdown(data):
         dcc.Dropdown(
             id="tab_arm_dropdown",
             options=[{"label": arm, "value": arm} for idx, arm in enumerate(df["arm"].unique().tolist())] +
-            [{'label': 'All Arms', 'value': '__all__'}],
+                [{'label': 'All Arms', 'value': '__all__'}],
             value='__all__'
         )
     ]
@@ -804,7 +712,7 @@ def update_tab_arm_dropdown(data):
         Input(component_id='selected_mooclet_data', component_property='data')
     ]
 )
-def update_tab_arm_dropdown(data):
+def update_tab_context_dropdown(data):
     ds = json.loads(data)
 
     contextual_variables = ds['cv']
@@ -812,12 +720,11 @@ def update_tab_arm_dropdown(data):
     return [
         dcc.Dropdown(
             id='tab_context_dropdown',
-            options=[{"label": context, "value": context}
-                     for context in contextual_variables],
+            options=[{"label": context, "value": context} for context in contextual_variables],
             value=contextual_variables[0]
         )
     ]
 
 
-if __name__ == '__main__':
+if __name__ == '__main__': 
     app.run_server()
