@@ -45,18 +45,18 @@ for id in mooclet_id:
 mlmxls = pd.ExcelFile('datasets/Modular_Link_MHA_Prototype.xlsx')
 mlmrv = outcome_var[315]
 mlmur_df = pd.read_excel(mlmxls, 'UR_0')
-mlmur_df.loc[mlmur_df[mlmrv] < 1, mlmrv]  = mlmur_df[mlmrv]*4 + 1
+mlmur_df.loc[mlmur_df[mlmrv] <= 1, mlmrv]  = mlmur_df[mlmrv]*4 + 1
 mlmtsc_df = pd.read_excel(mlmxls, 'TSC_4')
-mlmtsc_df.loc[mlmtsc_df[mlmrv] < 1, mlmrv]  = mlmtsc_df[mlmrv]*4 + 1
+mlmtsc_df.loc[mlmtsc_df[mlmrv] <= 1, mlmrv]  = mlmtsc_df[mlmrv]*4 + 1
 mlmdf = pd.concat([mlmur_df, mlmtsc_df])
 
 # 295
 mhaxls = pd.ExcelFile('datasets/MHAwave1ModularRationale.xlsx')
 mharv = outcome_var[295]
 mhaur_df = pd.read_excel(mhaxls, 'UR_0')
-mhaur_df.loc[mhaur_df[mharv] < 1, mharv]  = mhaur_df[mharv]*4 + 1
+mhaur_df.loc[mhaur_df[mharv] <= 1, mharv]  = mhaur_df[mharv]*4 + 1
 mhatsc_df = pd.read_excel(mhaxls, 'TSC_4')
-mhatsc_df.loc[mhatsc_df[mharv] < 1, mharv]  = mhatsc_df[mharv]*4 + 1
+mhatsc_df.loc[mhatsc_df[mharv] <= 1, mharv]  = mhatsc_df[mharv]*4 + 1
 mhadf = pd.concat([mhaur_df, mhatsc_df])
 
 # # 316 Comment out for now as 316 has null handle issue
