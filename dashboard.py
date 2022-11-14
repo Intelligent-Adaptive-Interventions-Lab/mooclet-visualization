@@ -20,7 +20,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # df = px.data.stocks()
 
-mooclet_id = [315, 295]
+mooclet_id = [315, 295, 388]
 
 # Get mooclet policy name and corresponding contextual variable.
 mooclet = {}
@@ -70,6 +70,12 @@ mhadf = pd.concat([mhaur_df, mhatsc_df])
 # mimtsc_df = pd.read_excel(mimxls, 'TSC_4')
 # mimdf = pd.concat([mimur_df, mimtsc_df])
 
+# 388
+timingxls = pd.ExcelFile('datasets/Modular_Timing_Prototype_2.xlsx')
+timingur_df = pd.read_excel(timingxls, 'UR_0')
+timingtsc_df = pd.read_excel(timingxls, 'TSC_4')
+timingdf = pd.concat([timingur_df, timingtsc_df])
+
 controls = dbc.Card(
     [
         dbc.Row(
@@ -87,7 +93,7 @@ controls = dbc.Card(
                         dcc.Dropdown(
                             id='tab_mooclet_dropdown',
                             options=[{"label": mooclet[moocletid], "value": moocletid} for moocletid in mooclet],
-                            value=315
+                            value=388
                         )
                     ], 
                     width=12
@@ -352,6 +358,10 @@ def update_selected_mooclet(mooclet_dropdown_value):
         ur_df = mhaur_df
         tsc_df = mhatsc_df
         df = mhadf
+    elif mooclet_dropdown_value == 388:
+        ur_df = timingur_df
+        tsc_df = timingtsc_df
+        df = timingdf
     # elif mooclet_dropdown_value == 316:
     #     ur_df = mimur_df
     #     tsc_df = mimtsc_df
