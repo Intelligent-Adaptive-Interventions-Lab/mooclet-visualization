@@ -308,6 +308,42 @@ context_group_bar_plot = dbc.Card(
     className="m-2"
 )
 
+arm_allocation_plot = dbc.Card(
+    [
+        html.Div(
+            id='arm_allocation_time_change',
+            children=[
+                dcc.RadioItems(
+                    ['US/Central', 'US/Eastern'],
+                    'US/Central',
+                    id='arm_allocation_timezone_change_type',
+                    inline=True
+                ),
+                dcc.RadioItems(
+                    ['week', 'day'],
+                    'week',
+                    id='arm_allocation_timerange_change_type',
+                    inline=True
+                )
+            ],
+            style={
+                'display': 'inline-block',
+                'marginTop': 20,
+                'marginBottom': 20
+            }
+        ),
+        html.Div(
+            id='arm_allocation_time_slider_div',
+            style={
+                'textAlign': 'center',
+                'marginBottom': 5
+            }
+        ),
+        dcc.Graph(id = 'arm_allocation_area_plot')
+    ],
+    className="m-2"
+)
+
 app.layout = dbc.Container(
     [
         html.H1(
@@ -325,6 +361,7 @@ app.layout = dbc.Container(
                 dbc.Col(
                     [
                         summary_table,
+                        arm_allocation_plot,
                         dbc.Row(
                             [
                                 dbc.Col([reward_num_bar_plot], width=6, lg=7, md=12),
@@ -567,7 +604,7 @@ def update_summary_missing_pie_chart(df, policy_dropdown_value, arm_dropdown_val
         df_query = df_query[df_query[("arm", "first")] == arm_dropdown_value]
 
     labels = ["Give Responses", "No Responses"]
-    values = [df_query[("arm", "count")].sum(), df_query[("reward_name", "count")].sum()]
+    values = [df_query[("reward_name", "count")].sum(), df_query[("arm", "count")].sum()]
     
     fig = go.Figure(
         [
@@ -578,6 +615,73 @@ def update_summary_missing_pie_chart(df, policy_dropdown_value, arm_dropdown_val
         title = 'Miss Data Distribution'
     )
     
+    return fig
+
+
+@app.callback(
+    Output(component_id='arm_allocation_area_plot', component_property='figure'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property='value'),
+        Input(component_id='tab_arm_dropdown', component_property= 'value'),
+        Input(component_id='arm_allocation_timezone_change_type', component_property='value'),
+        Input(component_id='arm_allocation_timerange_change_type', component_property='value'),
+        Input(component_id='arm_allocation_time_slider', component_property='value')
+    ]
+)
+def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_time_slider):
+    print(dropdown_value, arm_dropdown_value, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_time_slider)
+    df_query, _ = get_dataset(df, dropdown_value)
+    df_query, _ = filter_by_time(df_query, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_time_slider)
+
+    df_query = df_query.sort_values(by='arm_assign_time')
+    df_query = df_query.reset_index(drop=True)
+    df_query = df_query.reset_index()
+
+    for arm in df_query["arm"].unique().tolist():
+        df_query[f"Boolean: {arm}"] = (df_query["arm"] == arm).astype(int)
+
+    def computeRatio(row, arm):
+        return df_query.loc[:row["index"]][f"Boolean: {arm}"].sum() / (row["index"] + 1)
+
+    def computeCount(row, arm):
+        return df_query.loc[:row["index"]][f"Boolean: {arm}"].sum()
+    
+    def strFormatHoverText(row, arm):
+        return "count: {}\nratio: {}".format(row[f"Count: {arm}"], round(row[f"Ratio: {arm}"], 3))
+
+    for arm in df_query["arm"].unique().tolist():
+        df_query[f"Ratio: {arm}"] = df_query.apply(computeRatio, arm=arm, axis=1)
+        df_query[f"Count: {arm}"] = df_query.apply(computeCount, arm=arm, axis=1)
+
+    fig = go.Figure()
+    
+    if arm_dropdown_value == "__all__":
+        for arm in df_query["arm"].unique().tolist():
+            fig.add_trace(go.Scatter(
+                x=df_query["arm_assign_time"].values,
+                y=df_query[f"Ratio: {arm}"].values,
+                hovertext=df_query.apply(strFormatHoverText, arm=arm, axis=1).values.tolist(),
+                hoverinfo='text',
+                mode='lines',
+                name=arm,       # this sets its legend entry
+                line=dict(width=0.5),
+                stackgroup='one' # define stack group
+            ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=df_query["arm_assign_time"].values,
+            y=df_query[f"Ratio: {arm_dropdown_value}"].values,
+            hovertext=df_query.apply(strFormatHoverText, arm=arm_dropdown_value, axis=1).values.tolist(),
+            hoverinfo='text',
+            mode='lines',
+            name=arm_dropdown_value,       # this sets its legend entry
+            line=dict(width=0.5),
+            stackgroup='one' # define stack group
+        ))
+    
+    fig.update_layout(yaxis_range=(0, 1.0), title = 'Arm Allocation')
+
     return fig
 
 
@@ -684,6 +788,33 @@ def update_summary_missing_time_slider(df, tab_policy_dropdown, summary_missing_
     return [
         dcc.RangeSlider(
             id="summary_missing_time_slider",
+            min=0, 
+            max=len(time_range) - 1, 
+            step=len(time_range),
+            value=[0, len(time_range) - 1],
+            marks={str(idx): time_range[idx].strftime('%m-%d') for idx in range(len(time_range))},
+            updatemode='drag'
+        )
+    ]
+
+
+@app.callback(
+    Output(component_id='arm_allocation_time_slider_div', component_property= 'children'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property= 'value'),
+        Input(component_id='arm_allocation_timezone_change_type', component_property= 'value'),
+        Input(component_id='arm_allocation_timerange_change_type', component_property= 'value')
+    ]
+)
+def update_arm_allocation_time_slider(df, tab_policy_dropdown, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type):
+    print(tab_policy_dropdown, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type)
+    df_query, _ = get_dataset(df, tab_policy_dropdown)
+    _, time_range = filter_by_time(df_query, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type)
+
+    return [
+        dcc.RangeSlider(
+            id="arm_allocation_time_slider",
             min=0, 
             max=len(time_range) - 1, 
             step=len(time_range),
