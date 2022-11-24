@@ -2,7 +2,6 @@ from pandas_datareader import wb
 from dash import html, dcc, dash_table
 from dash.dependencies import Input, Output
 
-
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
@@ -15,10 +14,9 @@ import dash
 from config import TOKEN
 from utils import get_dataset, filter_by_time
 
-
+# Initializes Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-# df = px.data.stocks()
 
 mooclet_id = [315, 295, 388]
 
@@ -75,6 +73,7 @@ timingxls = pd.ExcelFile('datasets/Modular_Timing_Prototype_2.xlsx')
 timingur_df = pd.read_excel(timingxls, 'UR_0')
 timingtsc_df = pd.read_excel(timingxls, 'TSC_4')
 timingdf = pd.concat([timingur_df, timingtsc_df])
+
 
 controls = dbc.Card(
     [
@@ -159,6 +158,7 @@ controls = dbc.Card(
     className="p-3"
 )
 
+# Summary Table
 summary_table = dbc.Card(
     [
         html.Div(
