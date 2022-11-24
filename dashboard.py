@@ -29,15 +29,13 @@ outcome_var = {}
 for id in mooclet_id:
     mooclet_url = 'https://mooclet.canadacentral.cloudapp.azure.com/engine/api/v1/mooclet/' + \
         str(id)
-    mresponse = requests.get(url=mooclet_url, headers={
-                             'Authorization': TOKEN})
+    mresponse = requests.get(url=mooclet_url, headers={'Authorization': TOKEN})
     name = mresponse.json()['name']
     mooclet[id] = name
     print(mooclet)
     cv_url = 'https://mooclet.canadacentral.cloudapp.azure.com/engine/api/v1/policyparameters?mooclet=' + \
         str(id) + '&policy=6'
-    dresponse = requests.get(url=cv_url, headers={
-                             'Authorization': TOKEN})
+    dresponse = requests.get(url=cv_url, headers={'Authorization': TOKEN})
     context_var[id] = dresponse.json(
     )['results'][0]['parameters']['contextual_variables']  # Add Try/catch / if else for edge case handle
     context_var[id].remove('version')
@@ -323,6 +321,12 @@ arm_allocation_plot = dbc.Card(
                     ['week', 'day'],
                     'week',
                     id='arm_allocation_timerange_change_type',
+                    inline=True
+                ),
+                dcc.RadioItems(
+                    ['By time', 'By arm'],
+                    'By time',
+                    id='arm_allocation_order_change_type',
                     inline=True
                 )
             ],
@@ -626,11 +630,12 @@ def update_summary_missing_pie_chart(df, policy_dropdown_value, arm_dropdown_val
         Input(component_id='tab_arm_dropdown', component_property= 'value'),
         Input(component_id='arm_allocation_timezone_change_type', component_property='value'),
         Input(component_id='arm_allocation_timerange_change_type', component_property='value'),
+        Input(component_id='arm_allocation_order_change_type', component_property='value'),
         Input(component_id='arm_allocation_time_slider', component_property='value')
     ]
 )
-def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_time_slider):
-    print(dropdown_value, arm_dropdown_value, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_time_slider)
+def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_order_change_type, arm_allocation_time_slider):
+    print(dropdown_value, arm_dropdown_value, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_order_change_type, arm_allocation_time_slider)
     df_query, _ = get_dataset(df, dropdown_value)
     df_query, _ = filter_by_time(df_query, arm_allocation_timezone_change_type, arm_allocation_timerange_change_type, arm_allocation_time_slider)
 
@@ -659,7 +664,7 @@ def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_
     if arm_dropdown_value == "__all__":
         for arm in df_query["arm"].unique().tolist():
             fig.add_trace(go.Scatter(
-                x=df_query["arm_assign_time"].values,
+                x=df_query["arm_assign_time"].values if arm_allocation_order_change_type == "By time" else df_query.index.values,
                 y=df_query[f"Ratio: {arm}"].values,
                 hovertext=df_query.apply(strFormatHoverText, arm=arm, axis=1).values.tolist(),
                 hoverinfo='text',
@@ -670,7 +675,7 @@ def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_
             ))
     else:
         fig.add_trace(go.Scatter(
-            x=df_query["arm_assign_time"].values,
+            x=df_query["arm_assign_time"].values if arm_allocation_order_change_type == "By time" else df_query.index.values,
             y=df_query[f"Ratio: {arm_dropdown_value}"].values,
             hovertext=df_query.apply(strFormatHoverText, arm=arm_dropdown_value, axis=1).values.tolist(),
             hoverinfo='text',
@@ -680,7 +685,17 @@ def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_
             stackgroup='one' # define stack group
         ))
     
-    fig.update_layout(yaxis_range=(0, 1.0), title = 'Arm Allocation')
+    fig.update_layout(
+        yaxis_range=(0, 1.0), 
+        title = 'Arm Allocation', 
+        xaxis_title=arm_allocation_order_change_type,
+        yaxis_title='Arm allocation ratio',
+        legend_orientation="h",
+        legend_x=1,
+        legend_y=1.02,
+        legend_xanchor="right",
+        legend_yanchor="bottom"
+    )
 
     return fig
 

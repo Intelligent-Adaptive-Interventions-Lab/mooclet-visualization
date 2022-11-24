@@ -1,0 +1,9 @@
+mooclet:
+  token: <>
+
+database:
+  host: <>
+  database: <>
+  user: <>
+  password: <>
+  port: <>

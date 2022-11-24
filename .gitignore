@@ -130,6 +130,10 @@ dmypy.json
 
 # Config file
 config.py
+configs.yaml
 
 # Dataset
 datasets/
+
+# Postgres Database
+database.ini
