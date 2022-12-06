@@ -13,7 +13,7 @@ import dash
 
 
 from config import TOKEN
-from utils import get_dataset, filter_by_time
+from utils import get_dataset, filter_by_time, estimate_coef_mean
 
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -91,7 +91,7 @@ controls = dbc.Card(
                         dcc.Dropdown(
                             id='tab_mooclet_dropdown',
                             options=[{"label": mooclet[moocletid], "value": moocletid} for moocletid in mooclet],
-                            value=388
+                            value=315
                         )
                     ], 
                     width=12
@@ -348,6 +348,51 @@ arm_allocation_plot = dbc.Card(
     className="m-2"
 )
 
+coef_est_plot = dbc.Card(
+    [
+        html.Div(
+            id='coef_est_time_change',
+            children=[
+                dcc.RadioItems(
+                    ['US/Central', 'US/Eastern'],
+                    'US/Central',
+                    id='coef_est_timezone_change_type',
+                    inline=True
+                ),
+                dcc.RadioItems(
+                    ['week', 'day'],
+                    'week',
+                    id='coef_est_timerange_change_type',
+                    inline=True
+                ),
+                # dcc.RadioItems(
+                #     ['By time', 'By arm'],
+                #     'By time',
+                #     id='coef_est_order_change_type',
+                #     inline=True
+                # )
+            ],
+            style={
+                'display': 'inline-block',
+                'marginTop': 20,
+                'marginBottom': 20
+            }
+        ),
+        html.Div(
+            id='coef_est_time_slider_div',
+            style={
+                'textAlign': 'center',
+                'marginBottom': 5
+            }
+        ),
+        html.Div(
+            id='coef_est_dropdown_div'
+        ),
+        dcc.Graph(id='coef_est_plot')
+    ],
+    className="m-2"
+)
+
 app.layout = dbc.Container(
     [
         html.H1(
@@ -366,6 +411,7 @@ app.layout = dbc.Container(
                     [
                         summary_table,
                         arm_allocation_plot,
+                        coef_est_plot,
                         dbc.Row(
                             [
                                 dbc.Col([reward_num_bar_plot], width=6, lg=7, md=12),
@@ -701,6 +747,80 @@ def update_arm_allocation_area_plot(df, dropdown_value, arm_dropdown_value, arm_
 
 
 @app.callback(
+    Output(component_id='coef_est_plot', component_property='figure'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property='value'),
+        Input(component_id='tab_arm_dropdown', component_property= 'value'),
+        Input(component_id='coef_est_timezone_change_type', component_property='value'),
+        Input(component_id='coef_est_timerange_change_type', component_property='value'),
+        # Input(component_id='coef_est_order_change_type', component_property='value'),
+        Input(component_id='coef_est_time_slider', component_property='value'),
+        Input(component_id='coef_est_dropdown', component_property="value")
+    ]
+)
+def update_coef_est_dropdown(df, dropdown_value, arm_dropdown_value, coef_est_timezone_change_type, coef_est_timerange_change_type, coef_est_time_slider, coef_est_dropdown):
+    print(dropdown_value, arm_dropdown_value, coef_est_timezone_change_type, coef_est_timerange_change_type, coef_est_time_slider, coef_est_dropdown)
+    df_query, _ = get_dataset(df, dropdown_value)
+    df_query, _ = filter_by_time(df_query, coef_est_timezone_change_type, coef_est_timerange_change_type, coef_est_time_slider)
+    df_query = df_query.sort_values(by='arm_assign_time')
+    df_query = estimate_coef_mean(df_query, "By time")
+
+    if df_query is None:
+        return []
+
+    if coef_est_dropdown != "__all__":
+        df_query = df_query[df_query['term'] == coef_est_dropdown]
+
+    fig = go.Figure()
+    for term in df_query['term'].unique().tolist():
+        temp_df_query = df_query[df_query['term'] == term]
+        fig.add_trace(
+            go.Scatter(
+                name=term,
+                x=temp_df_query["By time"], 
+                y=temp_df_query['coef_mean'],
+                mode='lines'
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                name='Upper Bound',
+                x=temp_df_query["By time"],
+                y=temp_df_query['upper_bound'],
+                mode='lines',
+                line=dict(width=0),
+                showlegend=False
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                name='Lower Bound',
+                x=temp_df_query["By time"],
+                y=temp_df_query['lower_bound'],
+                mode='lines',
+                line=dict(width=0),
+                fillcolor='rgba(68, 68, 68, 0.3)',
+                fill='tonexty',
+                showlegend=False
+            )
+        )
+
+    fig.update_layout(
+        yaxis_title='Estimate',
+        title='Coefficient Estimates with 95% CI',
+        hovermode="x",
+        legend_orientation="h",
+        legend_x=1,
+        legend_y=1.02,
+        legend_xanchor="right",
+        legend_yanchor="bottom"
+    )
+
+    return fig
+
+
+@app.callback(
     Output(component_id='tab_time_slider_div', component_property= 'children'),
     [
         Input(component_id='selected_mooclet_data', component_property='data'),
@@ -841,6 +961,33 @@ def update_arm_allocation_time_slider(df, tab_policy_dropdown, arm_allocation_ti
 
 
 @app.callback(
+    Output(component_id='coef_est_time_slider_div', component_property= 'children'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property= 'value'),
+        Input(component_id='coef_est_timezone_change_type', component_property= 'value'),
+        Input(component_id='coef_est_timerange_change_type', component_property= 'value')
+    ]
+)
+def update_coef_est_time_slider(df, tab_policy_dropdown, coef_est_timezone_change_type, coef_est_timerange_change_type):
+    print(tab_policy_dropdown, coef_est_timezone_change_type, coef_est_timerange_change_type)
+    df_query, _ = get_dataset(df, tab_policy_dropdown)
+    _, time_range = filter_by_time(df_query, coef_est_timezone_change_type, coef_est_timerange_change_type)
+
+    return [
+        dcc.RangeSlider(
+            id="coef_est_time_slider",
+            min=0, 
+            max=len(time_range) - 1, 
+            step=len(time_range),
+            value=[0, len(time_range) - 1],
+            marks={str(idx): time_range[idx].strftime('%m-%d') for idx in range(len(time_range))},
+            updatemode='drag'
+        )
+    ]
+
+
+@app.callback(
     Output(component_id='tab_arm_dropdown_div', component_property='children'),
     [
         Input(component_id='selected_mooclet_data', component_property='data')
@@ -878,6 +1025,38 @@ def update_tab_context_dropdown(data):
             id='tab_context_dropdown',
             options=[{"label": context, "value": context} for context in contextual_variables],
             value=contextual_variables[0]
+        )
+    ]
+
+
+@app.callback(
+    Output(component_id='coef_est_dropdown_div', component_property='children'),
+    [
+        Input(component_id='selected_mooclet_data', component_property='data'),
+        Input(component_id='tab_policy_dropdown', component_property='value'),
+        Input(component_id='tab_arm_dropdown', component_property= 'value'),
+        Input(component_id='coef_est_timezone_change_type', component_property='value'),
+        Input(component_id='coef_est_timerange_change_type', component_property='value'),
+        # Input(component_id='coef_est_order_change_type', component_property='value'),
+        Input(component_id='coef_est_time_slider', component_property='value')
+    ]
+)
+def update_coef_est_dropdown(df, dropdown_value, arm_dropdown_value, coef_est_timezone_change_type, coef_est_timerange_change_type, coef_est_time_slider):
+    print(dropdown_value, arm_dropdown_value, coef_est_timezone_change_type, coef_est_timerange_change_type, coef_est_time_slider)
+    df_query, _ = get_dataset(df, dropdown_value)
+    df_query, _ = filter_by_time(df_query, coef_est_timezone_change_type, coef_est_timerange_change_type, coef_est_time_slider)
+
+    df_query = df_query.sort_values(by='arm_assign_time')
+    df_query = estimate_coef_mean(df_query, "By time")
+
+    if df_query is None:
+        return []
+
+    return [
+        dcc.Dropdown(
+            id="coef_est_dropdown",
+            options=[{"label": term, "value": term} for idx, term in enumerate(df_query["term"].unique().tolist())],
+            value='INTERCEPT'
         )
     ]
 
