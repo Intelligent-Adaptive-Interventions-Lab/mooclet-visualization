@@ -74,39 +74,22 @@ timingur_df = pd.read_excel(timingxls, 'UR_0')
 timingtsc_df = pd.read_excel(timingxls, 'TSC_4')
 timingdf = pd.concat([timingur_df, timingtsc_df])
 
-controls = dbc.Card(
+controls = html.Div(
     [
-        dbc.Row(
-            [
-                dbc.Col(
-                    [
-                        html.H2(
-                            id='change_mooclet',
-                            children='Change Mooclet',
-                            style={
-                                'textAlign': 'left',
-                                'marginBottom': 20
-                            }
-                        ),
-                        dcc.Dropdown(
+        dbc.DropdownMenu(
+            children=dcc.Dropdown(
                             id='tab_mooclet_dropdown',
                             options=[{"label": mooclet[moocletid], "value": moocletid} for moocletid in mooclet],
-                            value=315
-                        )
-                    ], 
-                    width=12
-                ),
-                dbc.Col(
-                    [
-                        html.H2(
-                            id = 'change_policy',
-                            children = 'Change Policy',
-                            style = {
-                                'textAlign':'left',
-                                'marginBottom':20
-                            }
-                        ),
-                        dcc.Dropdown(
+                            #placeholder='Select',
+                            value=388
+                        ), 
+            label="Mooclet", 
+            color="primary", 
+            size='lg'
+        ),
+
+        dbc.DropdownMenu(
+            children=dcc.Dropdown(
                             id = 'tab_policy_dropdown',
                             options = [
                                 {'label': 'Uniform Random', 'value': 'uniform_random' },
@@ -114,46 +97,33 @@ controls = dbc.Card(
                                 {'label': 'All Policies', 'value': '__any__'},
                                 {'label': 'All Data', 'value': '__all__'},
                                 ],
+                            #placeholder='Select',
                             value = '__all__'
-                        )
-                    ], 
-                    width=12
-                ),
-                dbc.Col(
-                    [
-                        html.H2(
-                            id = 'change_arm',
-                            children = 'Change Arm',
-                            style = {
-                                'textAlign':'left',
-                                'marginBottom':20
-                            }
-                        ),
-                        html.Div(
-                            id='tab_arm_dropdown_div'
-                        )
-                    ], 
-                    width=12
-                ),
-                dbc.Col(
-                    [
-                        html.H2(
-                            id = 'change_context',
-                            children = 'Change Context',
-                            style = {
-                                'textAlign':'left',
-                                'marginBottom':20
-                            }
-                        ),
-                        html.Div(
-                            id='tab_context_dropdown_div'
-                        ),
-                    ], 
-                    width=12
-                ),
-            ]
+                        ), 
+            label="Policy", 
+            color="info", 
+            size='lg'
+        ),
+
+        dbc.DropdownMenu(
+            children=  html.Div(
+                id='tab_arm_dropdown_div'
+            ), 
+            label="Arm", 
+            color="success", 
+            size='lg'
+        ),
+
+        dbc.DropdownMenu(
+            children=html.Div(
+                id='tab_context_dropdown_div'
+            ),
+            label="Context", 
+            color="warning", 
+            size='lg'
         )
     ],
+    style={"display": "flex", "flexWrap": "wrap"},
     className="p-3"
 )
 
@@ -406,8 +376,9 @@ app.layout = dbc.Container(
         ),
         dbc.Row(
             [
-                dbc.Col(controls, width=12, xl=4,  className="h-100"),
-                dbc.Col(
+                dbc.Row(controls, className="h-100"),
+                # dbc.Col(controls, width=12, xl=4,  className="h-100"),
+                dbc.Row(
                     [
                         summary_table,
                         arm_allocation_plot,
@@ -420,8 +391,9 @@ app.layout = dbc.Container(
                         ),
                         context_group_bar_plot
                     ], 
-                    width=12,
-                    xl=8
+                    #Remove below width setting based on course project repo.
+                    # width=12,
+                    # xl=8
                 ),
             ]
         ),
